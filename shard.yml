@@ -1,0 +1,17 @@
+name: sdl_test
+version: 0.1.0
+
+authors:
+  - Dominic Muller <nicklink483@gmail.com>
+
+targets:
+  sdl_test:
+    main: src/sdl_test.cr
+
+crystal: 0.23.0+8
+
+license: MIT
+
+dependencies:
+  sdl:
+    github: ysbaddaden/sdl.cr
