@@ -58,6 +58,8 @@ lib LibGL
   fun bind_attrib_location = glBindAttribLocation(program : UInt, index : UInt, name : Char*) : Void
   fun use_program = glUseProgram(program : UInt) : Void
 
+  fun uniform1f = glUniform1f(location : Int, v0 : Float) : Void
+  fun get_uniform_location = glGetUniformLocation(program : UInt, name : Char*) : Int
 end
 
 module GL
@@ -171,6 +173,7 @@ lib LibSDL
     type : EventType
     quit : QuitEvent
     key : KeyboardEvent
+    motion : MouseMotionEvent
   end
 
   struct KeyboardEvent
@@ -182,6 +185,18 @@ lib LibSDL
     padding2 : UInt8
     padding3 : UInt8
     keysym : Keysym
+  end
+
+  struct MouseMotionEvent
+    type : EventType
+    timestamp : UInt32
+    windowID : UInt32
+    which : UInt32
+    state : UInt32
+    x : Int32
+    y : Int32
+    xrel : Int32
+    yrel : Int32
   end
 
   SDLK_SCANCODE_MASK = 1 << 30
@@ -820,6 +835,9 @@ module SDL
   def self.poll_event
 
     event_processed = LibSDL.poll_event(@@event)
+    if event_processed == 0
+      return nil
+    end
     case @@event.value.type
     when LibSDL::EventType::QUIT
       return SDL::Event::Quit, @@event.value
@@ -846,9 +864,12 @@ module SDL
 
   # Non-blocking, so if there are no events, nothing happens
   def self.next_event
-    if event = self.poll_event
+    count = 0
+    while event = self.poll_event
+      count += 1
       yield event
     end
+    puts count if count > 0
   end
 
   def self.init
@@ -885,7 +906,7 @@ module SDL
       end
       err = LibSDL.gl_setattr(LibSDL::GLattr::GL_CONTEXT_MINOR_VERSION, 0)
       if err == 0
-        puts "OpenGL set to minor version 2"
+        puts "OpenGL set to minor version 0"
       end
       err = LibSDL.gl_setattr(LibSDL::GLattr::GL_DOUBLEBUFFER, 1)
       if err == 0
@@ -953,6 +974,8 @@ def process_keydown_event(keysym)
 end
 
 class Shader
+  getter :id
+
   def initialize(name : String)
     @vert_shader_filepath = "#{__DIR__}/shaders/#{name}/shader.vert"
     @frag_shader_filepath = "#{__DIR__}/shaders/#{name}/shader.frag"
@@ -1014,9 +1037,7 @@ class Shader
 
   def use
     puts @id
-    gets
     LibGL.use_program(@id)
-    puts "hi"
   end
 
 end
@@ -1041,63 +1062,53 @@ SDL.init do
     shader.compile
     shader.bind
     shader.link
+    loc = LibGL.get_uniform_location(shader.id, "time")
+
     shader.use
-    puts "1"
 
     #compile shader programs
-    # LibGL.clear_depth(1.0)
-    # puts "1"
-    # LibGL.clear(LibGL::COLOR_BUFFER_BIT | LibGL::DEPTH_BUFFER_BIT)
-    # puts "1"
+    LibGL.clear_depth(1.0)
+    LibGL.clear(LibGL::COLOR_BUFFER_BIT | LibGL::DEPTH_BUFFER_BIT)
     # LibSDL.gl_swap_window(window)
-    puts "1"
     # LibGL.gen_vertex_arrays(1, out voa_handle)
 
     # Create a VBO and receive a handle
     LibGL.gen_buffers(1, out vbo_handle)
-    puts "1"
     # LibGL.bind_vertex_array(voa_handle)
 
     # Bind the Array Buffer to our buffer using the handle
     LibGL.bind_buffer(LibGL::ARRAY_BUFFER, vbo_handle)
-    puts "1"
 
       # Pipe data over to VRAM
     puts triangle.size * sizeof(LibGL::FLOAT)
     LibGL.buffer_data(LibGL::ARRAY_BUFFER, 24, triangle.to_unsafe.as(Void*), LibGL::STATIC_DRAW)
-    puts "2"
 
       # Only use the position attribute of our vertices
       LibGL.enable_vertex_attrib_array(0_u32)
-    puts "2"
 
         # Refer to the starting point of drawable data
+        #                           first index, numbers per data point, type of data, whether its normalized, something, something
         LibGL.vertex_attrib_pointer(0_u32, 2, LibGL::FLOAT, LibGL::FALSE, 0, nil)
-    puts "2"
 
+        LibGL.uniform1f(loc, Time.now.ticks.to_f)
         # What sort of thing to draw, where to start in the buffer, and how many vertices
-        puts LibGL::TRIANGLES
         LibGL.draw_arrays(LibGL::TRIANGLES, 0_u32, 3)
-    puts "2"
 
-      # Disable position attribute use
-      LibGL.disable_vertex_attrib_array(0_u32)
-    puts "2"
-
-    # Unbind the Array Buffer
-    LibGL.bind_buffer(LibGL::ARRAY_BUFFER, 0_u32)
-    puts "2"
+        LibSDL.gl_swap_window(window)
     puts "entering loop"
+    count = 0
     while running
+      count += 1
       time = Time.now
+      LibGL.uniform1f(loc, (time.ticks / 1000000 % 1000000).to_f32)
       
       swapped = false
+      checked_mouse = false
       SDL.next_event do |event_type, event|
         case event_type
         when SDL::Event::Quit
           running = false
         when SDL::Event::Keydown
-          LibSDL.gl_swap_window(window)
           # process_keydown_event(event.key.keysym)
           swapped = true
         when SDL::Event::Keyup
@@ -1105,8 +1116,13 @@ SDL.init do
         when SDL::Event::TextInput
         when SDL::Event::None
         when SDL::Event::Window
-          # puts event
         when SDL::Event::MouseMotion
+          # puts checked_mouse
+          if !checked_mouse
+            # puts "#{event.motion.x}, #{event.motion.y}"
+            checked_mouse = true
+          end
+          # puts checked_mouse
         when SDL::Event::MouseButtonUp
         when SDL::Event::MouseButtonDown
         else
@@ -1120,8 +1136,15 @@ SDL.init do
           puts " ms"
         # end
       end
+      LibGL.draw_arrays(LibGL::TRIANGLES, 0_u32, 3)
+      LibSDL.gl_swap_window(window)
 
     end
+      # Disable position attribute use
+      LibGL.disable_vertex_attrib_array(0_u32)
+
+    # Unbind the Array Buffer
+    LibGL.bind_buffer(LibGL::ARRAY_BUFFER, 0_u32)
   end
 
 end
