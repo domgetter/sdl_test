@@ -1,4 +1,5 @@
 require "./sdl_test/*"
+require "./glm"
 
 @[Link("gl")]
 lib LibGL
@@ -25,6 +26,12 @@ lib LibGL
   COMPILE_STATUS     = 0x00008B81_u32
   LINK_STATUS        = 0x00008B82_u32
   INFO_LOG_LENGTH    = 0x00008B84_u32
+  CW                 = 0x00000900_u32
+  CCW                = 0x00000901_u32
+  BACK               = 0x00000405_u32
+  CULL_FACE          = 0x00000B44_u32
+
+  MULTISAMPLE        = 0x0000809D_u32
 
   FLOAT = 0x00001406_u32
   FALSE = 0_u8
@@ -44,6 +51,13 @@ lib LibGL
   fun gen_vertex_arrays = glGenVertexArrays(n : SizeI, ids : UInt*) : Void
   fun bind_vertex_array = glBindVertexArray(id : UInt) : Void
   fun draw_arrays = glDrawArrays(mode : Enum, first : Int, count : SizeI) : Void
+  fun flush = glFlush() : Void
+  fun finish = glFinish() : Void
+  fun enable = glEnable(cap : Enum) : Void
+  fun get_error = glGetError() : Enum
+  fun front_face = glFrontFace(mode : Enum) : Void
+  fun cull_face = glCullFace(mode : Enum) : Void
+  fun enable = glEnable(cap : Enum) : Void
 
   fun create_shader = glCreateShader(shaderType : Enum) : UInt
   fun shader_source = glShaderSource(shader : UInt, count : SizeI, string : Char**, length : Int*) : Void
@@ -59,6 +73,7 @@ lib LibGL
   fun use_program = glUseProgram(program : UInt) : Void
 
   fun uniform1f = glUniform1f(location : Int, v0 : Float) : Void
+  fun uniform_matrix_4fv = glUniformMatrix4fv(location : Int, count : SizeI, transpose : Boolean, value : Float*) : Void
   fun get_uniform_location = glGetUniformLocation(program : UInt, name : Char*) : Int
 end
 
@@ -93,6 +108,11 @@ lib LibGLEW
   fun init = glewInit() : Int32
 end
 
+@[Link("sdl2_image")]
+lib LibSDLImage
+  
+end
+
 @[Link("sdl2")]
 lib LibSDL
   fun init = SDL_Init(flags: UInt32) : Int32
@@ -100,6 +120,31 @@ lib LibSDL
   fun poll_event = SDL_PollEvent(event : Event*) : Int32
   fun gl_get_swap_interval = SDL_GL_GetSwapInterval() : Int32
   fun gl_set_swap_interval = SDL_GL_SetSwapInterval(interval : Int32) : Int32
+  fun set_relative_mouse_mode = SDL_SetRelativeMouseMode(enabled : Bool) : Void
+
+  # struct Surface
+  #   flags : UInt32
+  #   format : PixelFormat
+  #   w : Int
+  #   h : Int
+  #   pixels : Void*
+  #   userdata : Void*
+  #   locked : Int
+  #   lock_data : Void*
+  #   clip_rect : Rect
+  #   map : Void*
+  #   refcount : Int
+  # end
+
+  struct DisplayMode
+    format : UInt32
+    w : Int32
+    h : Int32
+    refresh_rate : Int32
+    driverdata : Void*
+  end
+
+  fun get_window_display_mode = SDL_GetWindowDisplayMode(window : Window*, mode : DisplayMode*) : Int32
 
   enum EventType : UInt32
     FIRSTEVENT = 0x0000
@@ -801,7 +846,9 @@ lib LibSDL
   type Window = Void
   type GLContext = Void*
 
+  WINDOW_FULLSCREEN  = 0x00000001
   WINDOW_OPENGL      = 0x00000002
+  WINDOW_FULLSCREEN_DESKTOP  = 0x00001001
   WINDOWPOS_CENTERED = 0x2FFF0000
 
 
@@ -864,12 +911,9 @@ module SDL
 
   # Non-blocking, so if there are no events, nothing happens
   def self.next_event
-    count = 0
     while event = self.poll_event
-      count += 1
       yield event
     end
-    puts count if count > 0
   end
 
   def self.init
@@ -900,6 +944,9 @@ module SDL
                    height : Int = 480,
                    flags : Int = LibSDL::WINDOW_OPENGL)
 
+      p_attr = Pointer(Int32).malloc
+      LibSDL.gl_getattr(LibSDL::GLattr::GL_DOUBLEBUFFER, p_attr)
+      puts "Double buffer is set to : #{p_attr.value}"
       err = LibSDL.gl_setattr(LibSDL::GLattr::GL_CONTEXT_MAJOR_VERSION, 3)
       if err == 0
         puts "OpenGL set to major version 3"
@@ -912,6 +959,25 @@ module SDL
       if err == 0
         puts "OpenGL set to double buffer"
       end
+      LibSDL.gl_getattr(LibSDL::GLattr::GL_DOUBLEBUFFER, p_attr)
+      puts "Double buffer is set to : #{p_attr.value}"
+
+      LibSDL.gl_getattr(LibSDL::GLattr::GL_MULTISAMPLEBUFFERS, p_attr)
+      puts "Multisample Buffers is set to : #{p_attr.value}"
+      # Enable antialiasing
+      # err = LibSDL.gl_setattr(LibSDL::GLattr::GL_MULTISAMPLEBUFFERS, 1)
+      # puts "setattr multisample buffers: #{err}"
+      # if err != 0
+      #   raise "couldn't set multisample buffers"
+      # end
+      # LibSDL.gl_getattr(LibSDL::GLattr::GL_MULTISAMPLEBUFFERS, p_attr)
+      # puts "Multisample Buffers is set to : #{p_attr.value}"
+      # LibSDL.gl_getattr(LibSDL::GLattr::GL_MULTISAMPLESAMPLES, p_attr)
+      # puts "Multisample Samples is set to : #{p_attr.value}"
+      # LibSDL.gl_setattr(LibSDL::GLattr::GL_MULTISAMPLESAMPLES, 4)
+      # LibSDL.gl_getattr(LibSDL::GLattr::GL_MULTISAMPLESAMPLES, p_attr)
+      # puts "Multisample Samples is set to : #{p_attr.value}"
+      # LibSDL.gl_setattr(LibSDL::GLattr::GL_ACCELERATED_VISUAL, 1)
 
       window = LibSDL.create_window(title, x, y, width, height, flags)
       puts "window created"
@@ -919,12 +985,16 @@ module SDL
       LibGLEW.experimental = 1u8
       LibGLEW.init
 
+      LibGL.front_face(LibGL::CW)
+      LibGL.cull_face(LibGL::BACK)
+      LibGL.enable(LibGL::CULL_FACE)
+      LibGL.enable(LibGL::MULTISAMPLE)
+
       puts "about to clear color"
       # GL::ColorBuffer.clear(GL::Color4.new(0.8, 0.5, 0.3, 1.0))
       puts "about to swap buffers"
       LibSDL.gl_swap_window(window)
       # attr_val = Pointer(Int32).new
-      p_attr = Pointer(Int32).malloc
 
       LibSDL.gl_getattr(LibSDL::GLattr::GL_CONTEXT_MAJOR_VERSION, p_attr)
       print p_attr.value
@@ -935,7 +1005,14 @@ module SDL
       print "Swap interval: "
       puts LibSDL.gl_get_swap_interval
       # LibSDL.gl_set_swap_interval(0)
+      # print "Swap interval: "
       # puts LibSDL.gl_get_swap_interval
+
+      print "Refresh rate: "
+      LibSDL.get_window_display_mode(window, out mode)
+      print mode.refresh_rate
+      puts " Hz"
+
       yield(window)
       LibSDL.destroy_window(window)
       puts "window destroyed"
@@ -989,11 +1066,17 @@ class Shader
     @id = LibGL.create_program
     vert_shader_source : String = File.read(@vert_shader_filepath) || ""
     @vert_shader_handle = LibGL.create_shader(LibGL::VERTEX_SHADER)
+    if @vert_shader_handle == 0
+      raise "couldn't create vertext shader"
+    end
     compile_and_report_errors(vert_shader_source, @vert_shader_handle)
 
 
     frag_shader_source : String = File.read(@frag_shader_filepath) || ""
     @frag_shader_handle = LibGL.create_shader(LibGL::FRAGMENT_SHADER)
+    if @frag_shader_handle == 0
+      raise "couldn't create fragment shader"
+    end
     compile_and_report_errors(frag_shader_source, @frag_shader_handle)
 
 
@@ -1003,6 +1086,7 @@ class Shader
     p = source.to_unsafe
     LibGL.shader_source(handle, 1, pointerof(p), nil)
     LibGL.compile_shader(handle)
+    puts handle
     LibGL.get_shader_iv(handle, LibGL::COMPILE_STATUS, out success)
     if(success == LibGL::FALSE)
         LibGL.get_shader_iv(handle, LibGL::INFO_LOG_LENGTH, out info_log_length)
@@ -1010,7 +1094,7 @@ class Shader
           LibGL.get_shader_info_log(handle, info_log_length, nil, buffer)
           {info_log_length, info_log_length}
         end
-        raise "Error compiling shader: #{info_log}"
+        raise "Error compiling shader: #{info_log}\nhandle: #{handle}"
     end
   end
 
@@ -1041,18 +1125,75 @@ class Shader
   end
 
 end
+
+class Transform
+  def initialize(@position, @rotation, @scale)
+
+  end
+end
+def mvp(horizontal_angle : Float32 = 3.14_f32,
+        vertical_angle : Float32 = 0.0_f32,
+        position : GLM::Vec3 = GLM.vec3(0, 0, 5),
+        model : GLM::Mat4 = GLM::Mat4.identity)
+
+    direction = GLM.vec3(
+      Math.cos(vertical_angle) * Math.sin(horizontal_angle),
+      Math.sin(vertical_angle),
+      Math.cos(vertical_angle) * Math.cos(horizontal_angle)
+    )
+    right = GLM.vec3(
+      Math.sin(horizontal_angle - Math::PI / 2),
+      0,
+      Math.cos(horizontal_angle - Math::PI / 2)
+    )
+    up = right.cross(direction)
+    perspective = GLM.perspective 70.0, 4.0/3.0, 0.1, 100.0
+    view = GLM.look_at position, position + direction, up
+    return perspective * view * model
+
+end
 SDL.init do
 
   puts "sdl is running"
 
-  SDL::Window.new(title: "test title here", width: 1024, height: 768) do |window|
+  SDL::Window.new(title: "test title here", width: 1366, height: 768,
+                  flags: LibSDL::WINDOW_OPENGL | LibSDL::WINDOW_FULLSCREEN_DESKTOP) do |window|
+  # SDL::Window.new(title: "test title here", width: 512, height: 768) do |window|
     running = true
 
+    root = (1_f32 / Math.sqrt(2)).to_f32
+    # a = [ 1_f32,  0_f32, -root ]
+    # b = [ -1_f32,  0_f32, -root ]
+    # c = [ 0_f32,  1_f32, root ]
+    # d = [ 0_f32,  -1_f32, root ]
+    a = [ -1_f32,  1_f32, -1_f32 ]
+    b = [ -1_f32,  -1_f32, 1_f32 ]
+    c = [ 1_f32,  1_f32, 1_f32 ]
+    d = [ 1_f32,  -1_f32, -1_f32 ]
     triangle = [
-      -1_f32, -1_f32,
-       1_f32, -1_f32,
-       0_f32,  1_f32
-    ]
+      a, c, b,
+      a, b, d,
+      b, c, d,
+      c, a, d
+    ].flatten
+    # triangle = [
+       # 0_f32,  0_f32, 1_f32, # a
+      # 0_f32,  0.268_f32, 0_f32, # b
+       # 1_f32, -1_f32, 0_f32, # c
+
+       # 0_f32,  0_f32, 1_f32, # a
+       # -1_f32, -1_f32, 0_f32, # d
+       # 0_f32,  0.268_f32, 0_f32, # b
+
+       # 0_f32,  0.268_f32, 0_f32, # b
+       # -1_f32, -1_f32, 0_f32, # d
+       # 1_f32, -1_f32, 0_f32, # c
+
+       # 1_f32, -1_f32, 0_f32, # c
+       # -1_f32, -1_f32, 0_f32, # d
+       # 0_f32,  0_f32, 1_f32  # a
+
+    # ]
 
 
     #load shader source strings
@@ -1062,13 +1203,15 @@ SDL.init do
     shader.compile
     shader.bind
     shader.link
-    loc = LibGL.get_uniform_location(shader.id, "time")
+    # loc = LibGL.get_uniform_location(shader.id, "time")
+    # loc2 = LibGL.get_uniform_location(shader.id, "real_time")
+    loc3 = LibGL.get_uniform_location(shader.id, "transform")
 
     shader.use
 
     #compile shader programs
-    LibGL.clear_depth(1.0)
-    LibGL.clear(LibGL::COLOR_BUFFER_BIT | LibGL::DEPTH_BUFFER_BIT)
+    # LibGL.clear_depth(1.0)
+    LibGL.clear(LibGL::COLOR_BUFFER_BIT)# | LibGL::DEPTH_BUFFER_BIT)
     # LibSDL.gl_swap_window(window)
     # LibGL.gen_vertex_arrays(1, out voa_handle)
 
@@ -1081,26 +1224,56 @@ SDL.init do
 
       # Pipe data over to VRAM
     puts triangle.size * sizeof(LibGL::FLOAT)
-    LibGL.buffer_data(LibGL::ARRAY_BUFFER, 24, triangle.to_unsafe.as(Void*), LibGL::STATIC_DRAW)
+    LibGL.buffer_data(LibGL::ARRAY_BUFFER, triangle.size * sizeof(LibGL::FLOAT), triangle.to_unsafe.as(Void*), LibGL::STATIC_DRAW)
 
       # Only use the position attribute of our vertices
       LibGL.enable_vertex_attrib_array(0_u32)
 
         # Refer to the starting point of drawable data
         #                           first index, numbers per data point, type of data, whether its normalized, something, something
-        LibGL.vertex_attrib_pointer(0_u32, 2, LibGL::FLOAT, LibGL::FALSE, 0, nil)
+        LibGL.vertex_attrib_pointer(0_u32, 3, LibGL::FLOAT, LibGL::FALSE, 0, nil)
 
-        LibGL.uniform1f(loc, Time.now.ticks.to_f)
+        # LibGL.uniform1f(loc, Time.now.ticks.to_f)
+        # LibGL.uniform1f(loc2, Time.now.ticks.to_f)
         # What sort of thing to draw, where to start in the buffer, and how many vertices
-        LibGL.draw_arrays(LibGL::TRIANGLES, 0_u32, 3)
+        LibGL.draw_arrays(LibGL::TRIANGLES, 0_u32, triangle.size/3)
 
         LibSDL.gl_swap_window(window)
     puts "entering loop"
     count = 0
+    frame_time_start = Time.now
+    print_frame_time = Time.now
+    horizontal_angle = 3.14_f32
+    vertical_angle = 0.0_f32
+    position = GLM.vec3(0,0,5)
+    model = GLM::Mat4.identity
+    rotation_angle = 0.0_f32
+    rotation = GLM::Mat4.identity
+    rotation[0,0] = Math.cos(rotation_angle)
+    rotation[0,1] = Math.sin(rotation_angle)
+    rotation[1,0] = -Math.sin(rotation_angle)
+    rotation[1,1] = Math.cos(rotation_angle)
+    model = rotation*model
+    
+    transform = mvp(horizontal_angle, vertical_angle, position, model)
+    # transform = [
+    #   1_f32, 0.01_f32, 0_f32, 0_f32,
+    #   0_f32, 1_f32, 0_f32, 0_f32,
+    #   0_f32, 0_f32, 1_f32, 0_f32,
+    #   0_f32, 0_f32, 0_f32, 1_f32
+    # ]
+    LibSDL.set_relative_mouse_mode(true)
+    total_mouse_rel_x = 0
+    total_mouse_rel_y = 0
     while running
+      total_mouse_rel_x = 0
+      total_mouse_rel_y = 0
       count += 1
       time = Time.now
-      LibGL.uniform1f(loc, (time.ticks / 1000000 % 1000000).to_f32)
+      # LibGL.uniform1f(loc, (time.epoch_ms % 10000000).to_f32)
+      real_time = time.epoch_ms % 10000000
+      # puts real_time if count % 100 == 0
+      # LibGL.uniform1f(loc2, real_time.to_f32/100.0)
       
       swapped = false
       checked_mouse = false
@@ -1111,6 +1284,33 @@ SDL.init do
         when SDL::Event::Keydown
           # process_keydown_event(event.key.keysym)
           swapped = true
+          case event.key.keysym.sym
+          when LibSDL::Keycode::V
+            # transform[1] += 0.01_f32
+            position.x += 0.1
+          when LibSDL::Keycode::B
+            # transform[1] -= 0.01_f32
+            position.x -= 0.1
+          when LibSDL::Keycode::F
+            # transform[1] += 0.01_f32
+            position.y += 0.1
+          when LibSDL::Keycode::G
+            # transform[1] -= 0.01_f32
+            position.y -= 0.1
+          when LibSDL::Keycode::R
+            # transform[1] += 0.01_f32
+            position.z += 0.1
+          when LibSDL::Keycode::T
+            # transform[1] -= 0.01_f32
+            position.z -= 0.1
+          when LibSDL::Keycode::W
+            # transform[1] -= 0.01_f32
+            rotation_angle -= 0.01
+          when LibSDL::Keycode::S
+            # transform[1] -= 0.01_f32
+            rotation_angle += 0.01
+          else
+          end
         when SDL::Event::Keyup
 
         when SDL::Event::TextInput
@@ -1118,26 +1318,75 @@ SDL.init do
         when SDL::Event::Window
         when SDL::Event::MouseMotion
           # puts checked_mouse
+          # puts event.motion
+          total_mouse_rel_x += event.motion.xrel
+          total_mouse_rel_y += event.motion.yrel
           if !checked_mouse
             # puts "#{event.motion.x}, #{event.motion.y}"
             checked_mouse = true
           end
+          # puts total_mouse_rel_x
+          # puts total_mouse_rel_y
           # puts checked_mouse
         when SDL::Event::MouseButtonUp
         when SDL::Event::MouseButtonDown
         else
-          puts event
+          # puts event
         end
       end
+      horizontal_angle += 0.001_f32 * total_mouse_rel_x
+      vertical_angle += 0.001_f32 * total_mouse_rel_y
+      # rotation_angle += 0.0001_f32
+      
+      rotation[0,0] = Math.cos(rotation_angle)
+      rotation[0,1] = Math.sin(rotation_angle)
+      rotation[1,0] = -Math.sin(rotation_angle)
+      rotation[1,1] = Math.cos(rotation_angle)
+      transform = mvp(horizontal_angle, vertical_angle, position, rotation*model)
+      # transform[1] -= 0.001_f32 * total_mouse_rel_x
+      # transform[4] -= 0.001_f32 * total_mouse_rel_y
       if swapped
         t = Time.now - time
         # if t.ticks > 3000
-          print "%.3f" % (t.ticks / 10000.0)
-          puts " ms"
+          # print "%.3f" % (t.ticks / 10000.0)
+          # puts " ms"
         # end
       end
-      LibGL.draw_arrays(LibGL::TRIANGLES, 0_u32, 3)
+      LibGL.uniform_matrix_4fv(loc3, 1, LibGL::FALSE, transform)
+      LibGL.clear(LibGL::COLOR_BUFFER_BIT)# | LibGL::DEPTH_BUFFER_BIT)
+      call_to_draw_time = Time.now
+      LibGL.draw_arrays(LibGL::TRIANGLES, 0_u32, triangle.size/3)
+      call_to_draw_time = (Time.now - call_to_draw_time).ticks/10000.0
+      # LibGL.flush
+      swap_time = Time.now
+      LibGL.finish
+      LibGL.flush
       LibSDL.gl_swap_window(window)
+      swap_time = (Time.now - swap_time).ticks/10000.0
+
+      # if count % 120 == 0
+      if (Time.now - print_frame_time).ticks > 10000000
+        # puts "call to draw took: #{call_to_draw_time} ms"
+        # puts "swapping took: #{swap_time} ms"
+        puts "FPS: #{count}"
+        # puts "real_time.to_f32: #{real_time.to_f32/60.0}"
+        # puts "sin real_time.to_f32: #{Math.sin(real_time.to_f32/100.0)/5.0}"
+        # puts 1000.0/((Time.now - frame_time_start).ticks/10000.0)
+        print_frame_time = Time.now
+        count = 0
+      end
+      # end
+      frame_time_start = Time.now
+      tt = Time.now
+      cc = 0
+      # while(cc < 1000000)
+      #   cc += 1
+      # end
+
+      # if 0.0151 - swap_time/1000.0 >= 0
+      #   sleep 0.0151 - swap_time/1000.0
+      # end
+      # puts (Time.now - tt).ticks/10000.0
 
     end
       # Disable position attribute use
