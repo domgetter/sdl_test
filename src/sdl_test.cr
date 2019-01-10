@@ -1368,121 +1368,121 @@ SDL.init do
 
     program.use
 
-    #compile shader programs
+      #compile shader programs
 
-    LibGL.clear(LibGL::COLOR_BUFFER_BIT)
+      LibGL.clear(LibGL::COLOR_BUFFER_BIT)
 
-    # Create a VBO and receive a handle
-    vbo_handle = uninitialized LibGL::UInt
-    GL.gen_buffers.call(1, pointerof(vbo_handle))
+      # Create a VBO and receive a handle
+      vbo_handle = uninitialized LibGL::UInt
+      GL.gen_buffers.call(1, pointerof(vbo_handle))
 
-    # Bind the Array Buffer to our buffer using the handle
-    GL.bind_buffer.call(LibGL::ARRAY_BUFFER, vbo_handle)
+      # Bind the Array Buffer to our buffer using the handle
+      GL.bind_buffer.call(LibGL::ARRAY_BUFFER, vbo_handle)
 
-    # Pipe data over to VRAM
-    puts triangle.size * sizeof(LibGL::FLOAT)
-    GL.buffer_data(size: triangle.size * sizeof(LibGL::FLOAT),
-                   data: triangle.to_unsafe.as(Void*))
+      # Pipe data over to VRAM
+      puts triangle.size * sizeof(LibGL::FLOAT)
+      GL.buffer_data(size: triangle.size * sizeof(LibGL::FLOAT),
+                     data: triangle.to_unsafe.as(Void*))
 
-    # Only use the position attribute of our vertices
-    GL.enable_vertex_attrib_array.call(0_u32)
+      # Only use the position attribute of our vertices
+      GL.enable_vertex_attrib_array.call(0_u32)
 
-    # Refer to the starting point of drawable data
-    p = uninitialized Void*
-    GL.vertex_attrib_pointer.call(0_u32, 3, LibGL::FLOAT, LibGL::FALSE, 0, p)
+      # Refer to the starting point of drawable data
+      p = uninitialized Void*
+      GL.vertex_attrib_pointer.call(0_u32, 3, LibGL::FLOAT, LibGL::FALSE, 0, p)
 
-    # What sort of thing to draw, where to start in the buffer, and how many vertices
-    LibGL.draw_arrays(LibGL::TRIANGLES, 0_u32, triangle.size/3)
+      # What sort of thing to draw, where to start in the buffer, and how many vertices
+      LibGL.draw_arrays(LibGL::TRIANGLES, 0_u32, triangle.size/3)
 
-    LibSDL.gl_swap_window(window)
-    horizontal_angle = 3.14_f32
-    vertical_angle = 0.0_f32
-    position = GLM.vec3(0,0,5)
-    model = GLM::Mat4.identity
-    rotation_angle = 0.0_f32
-    rotation = GLM::Mat4.identity
-
-    rotation[0,0] = Math.cos(rotation_angle)
-    rotation[0,1] = Math.sin(rotation_angle)
-    rotation[1,0] = -Math.sin(rotation_angle)
-    rotation[1,1] = Math.cos(rotation_angle)
-
-    model = rotation*model
-
-    transform = mvp(horizontal_angle, vertical_angle, position, model)
-
-    LibSDL.set_relative_mouse_mode(true)
-
-    total_mouse_rel_x = 0
-    total_mouse_rel_y = 0
-
-    while running
-      total_mouse_rel_x = 0
-      total_mouse_rel_y = 0
-
-      swapped = false
-      checked_mouse = false
-      SDL.next_event do |event_type, event|
-        case event_type
-        when SDL::Event::Quit
-          running = false
-        when SDL::Event::Keydown
-          swapped = true
-          case event.key.keysym.sym
-          when LibSDL::Keycode::V
-            position.x += 0.1
-          when LibSDL::Keycode::B
-            position.x -= 0.1
-          when LibSDL::Keycode::F
-            position.y += 0.1
-          when LibSDL::Keycode::G
-            position.y -= 0.1
-          when LibSDL::Keycode::R
-            position.z += 0.1
-          when LibSDL::Keycode::T
-            position.z -= 0.1
-          when LibSDL::Keycode::W
-            rotation_angle -= 0.05
-          when LibSDL::Keycode::S
-            rotation_angle += 0.05
-          else
-          end
-        when SDL::Event::Keyup
-        when SDL::Event::TextInput
-        when SDL::Event::None
-        when SDL::Event::Window
-        when SDL::Event::MouseMotion
-          total_mouse_rel_x += event.motion.xrel
-          total_mouse_rel_y += event.motion.yrel
-        when SDL::Event::MouseButtonUp
-        when SDL::Event::MouseButtonDown
-        else
-        end
-      end
-      horizontal_angle += 0.001_f32 * total_mouse_rel_x
-      vertical_angle += 0.001_f32 * total_mouse_rel_y
+      LibSDL.gl_swap_window(window)
+      horizontal_angle = 3.14_f32
+      vertical_angle = 0.0_f32
+      position = GLM.vec3(0,0,5)
+      model = GLM::Mat4.identity
+      rotation_angle = 0.0_f32
+      rotation = GLM::Mat4.identity
 
       rotation[0,0] = Math.cos(rotation_angle)
       rotation[0,1] = Math.sin(rotation_angle)
       rotation[1,0] = -Math.sin(rotation_angle)
       rotation[1,1] = Math.cos(rotation_angle)
 
-      transform = mvp(horizontal_angle, vertical_angle, position, rotation*model)
+      model = rotation*model
 
-      GL.uniform_matrix_4fv.call(loc3, 1, LibGL::FALSE, transform.to_unsafe)
-      LibGL.clear(LibGL::COLOR_BUFFER_BIT)
-      LibGL.draw_arrays(LibGL::TRIANGLES, 0_u32, triangle.size/3)
+      transform = mvp(horizontal_angle, vertical_angle, position, model)
 
-      LibGL.flush
-      LibGL.finish
-      LibSDL.gl_swap_window(window)
+      LibSDL.set_relative_mouse_mode(true)
 
-    end
-    # Disable position attribute use
-    GL.disable_vertex_attrib_array.call(0_u32)
+      total_mouse_rel_x = 0
+      total_mouse_rel_y = 0
 
-    # Unbind the Array Buffer
-    GL.bind_buffer.call(LibGL::ARRAY_BUFFER, 0_u32)
+      while running
+        total_mouse_rel_x = 0
+        total_mouse_rel_y = 0
+
+        swapped = false
+        checked_mouse = false
+        SDL.next_event do |event_type, event|
+          case event_type
+          when SDL::Event::Quit
+            running = false
+          when SDL::Event::Keydown
+            swapped = true
+            case event.key.keysym.sym
+            when LibSDL::Keycode::V
+              position.x += 0.1
+            when LibSDL::Keycode::B
+              position.x -= 0.1
+            when LibSDL::Keycode::F
+              position.y += 0.1
+            when LibSDL::Keycode::G
+              position.y -= 0.1
+            when LibSDL::Keycode::R
+              position.z += 0.1
+            when LibSDL::Keycode::T
+              position.z -= 0.1
+            when LibSDL::Keycode::W
+              rotation_angle -= 0.05
+            when LibSDL::Keycode::S
+              rotation_angle += 0.05
+            else
+            end
+          when SDL::Event::Keyup
+          when SDL::Event::TextInput
+          when SDL::Event::None
+          when SDL::Event::Window
+          when SDL::Event::MouseMotion
+            total_mouse_rel_x += event.motion.xrel
+            total_mouse_rel_y += event.motion.yrel
+          when SDL::Event::MouseButtonUp
+          when SDL::Event::MouseButtonDown
+          else
+          end
+        end
+        horizontal_angle += 0.001_f32 * total_mouse_rel_x
+        vertical_angle += 0.001_f32 * total_mouse_rel_y
+
+        rotation[0,0] = Math.cos(rotation_angle)
+        rotation[0,1] = Math.sin(rotation_angle)
+        rotation[1,0] = -Math.sin(rotation_angle)
+        rotation[1,1] = Math.cos(rotation_angle)
+
+        transform = mvp(horizontal_angle, vertical_angle, position, rotation*model)
+
+        GL.uniform_matrix_4fv.call(loc3, 1, LibGL::FALSE, transform.to_unsafe)
+        LibGL.clear(LibGL::COLOR_BUFFER_BIT)
+        LibGL.draw_arrays(LibGL::TRIANGLES, 0_u32, triangle.size/3)
+
+        LibGL.flush
+        LibGL.finish
+        LibSDL.gl_swap_window(window)
+
+      end
+      # Disable position attribute use
+      GL.disable_vertex_attrib_array.call(0_u32)
+
+      # Unbind the Array Buffer
+      GL.bind_buffer.call(LibGL::ARRAY_BUFFER, 0_u32)
 
     program.unuse
   end
