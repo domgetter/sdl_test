@@ -1113,72 +1113,43 @@ class ShaderProgram
   end
 
   def compile
-    # @id = LibGL.get_proc_address("glCreateProgram")
-    begin
-      @id = GL.create_program.call()
-    rescue
-      puts "uh oh"
-      raise "more"
-    end
+    @id = GL.create_program.call()
     
-    puts "created program?"
     vert_shader_source : String = File.read(@vert_shader_filepath) || ""
-    puts "loaded vertex shader source file"
     @vert_shader_handle = GL.create_shader.call(LibGL::VERTEX_SHADER)
-    puts "created vertex shader"
     if @vert_shader_handle == 0
       raise "couldn't create vertex shader"
     end
     compile_and_report_errors(vert_shader_source, @vert_shader_handle)
 
-
     frag_shader_source : String = File.read(@frag_shader_filepath) || ""
-    puts "loaded fragment shader source file"
     @frag_shader_handle = GL.create_shader.call(LibGL::FRAGMENT_SHADER)
-    puts "created fragment shader"
     if @frag_shader_handle == 0
       raise "couldn't create fragment shader"
     end
     compile_and_report_errors(frag_shader_source, @frag_shader_handle)
 
-
   end
 
   private def compile_and_report_errors(source : String, handle)
     p = source.to_unsafe
-    puts typeof(p)
-    puts typeof(pointerof(p))
     q = source.size
-    puts "shader handle being sourced: #{handle}"
     GL.shader_source.call(handle, 1, pointerof(p), pointerof(q))
-    puts q
-    puts "called shader_source"
     GL.compile_shader.call(handle)
-    puts "called compile_shader"
     success = uninitialized LibGL::Int
-    puts "calling get_shader_iv"
     func = GL.get_shader_iv
     func.call(handle, LibGL::COMPILE_STATUS, pointerof(success))
-    puts "called get_shader_iv"
 
     if(success == LibGL::FALSE)
-      puts "uh oh in shader land"
       info_log_length = uninitialized LibGL::SizeI
-      puts "calling get_shader_iv"
       GL.get_shader_iv.call(handle, LibGL::INFO_LOG_LENGTH, pointerof(info_log_length))
-      puts "called get_shader_iv"
-      puts info_log_length
       info_log = String.new(info_log_length) do |buffer|
-
         r = uninitialized LibGL::SizeI
-          puts "calling get_shader_info_log"
         GL.get_shader_info_log.call(handle, info_log_length, pointerof(r), buffer)
-          puts "called get_shader_info_log"
         {info_log_length, info_log_length}
       end
       raise "Error compiling shader: #{info_log}\nhandle: #{handle}"
     end
-    puts "compiled without error?"
   end
 
   def bind
@@ -1189,16 +1160,11 @@ class ShaderProgram
   def link
 
     GL.attach_shader.call(@id, @vert_shader_handle)
-    puts "attached vertex shader"
     GL.attach_shader.call(@id, @frag_shader_handle)
-    puts "attached fragment shader"
 
-    puts "program: #{@id}"
     GL.link_program.call(@id)
-    puts "called link_program"
     success = uninitialized LibGL::Int
     GL.get_program_iv.call(@id, LibGL::LINK_STATUS, pointerof(success))
-    puts "success: #{success}"
     if(success == LibGL::FALSE)
       info_log_length = uninitialized LibGL::SizeI
       GL.get_program_iv.call(@id, LibGL::INFO_LOG_LENGTH, pointerof(info_log_length))
@@ -1215,12 +1181,6 @@ class ShaderProgram
     puts @id
     GL.use_program.call(@id)
   end
-  
-  def use
-    GL.use_program.call(@id)
-    yield
-    GL.use_program.call(0_u32)
-  end
 
   def unuse
     GL.use_program.call(0_u32)
@@ -1233,6 +1193,7 @@ class Transform
 
   end
 end
+
 def mvp(horizontal_angle : Float32 = 3.14_f32,
         vertical_angle : Float32 = 0.0_f32,
         position : GLM::Vec3 = GLM.vec3(0, 0, 5),
@@ -1298,35 +1259,30 @@ module GL
       .unbox(Box.box(LibGL.get_proc_address("glDisableVertexAttribArray")))
   end
 
-  # fun uniform_matrix_4fv = glUniformMatrix4fv(location : Int, count : SizeI, transpose : Boolean, value : Float*) : Void
   def self.uniform_matrix_4fv 
     Box(LibGL::UniformMatrix4fv)
       .unbox(Box.box(LibGL.get_proc_address("glUniformMatrix4fv")))
   end
 
-  # fun create_program = glCreateProgram() : UInt
   def self.create_program
-    puts "gonna get pointer to glCreateProgram.  will probs fail"
-    # ret = LibGL.get_proc_address("glCreateProgram").as((Proc(UInt32))**).value
-    ret = Box(LibGL::CreateProgram).unbox(Box.box(LibGL.get_proc_address("glCreateProgram")))
-    puts "didnt fail!"
-    puts ret
-    ret
+    Box(LibGL::CreateProgram)
+      .unbox(Box.box(LibGL.get_proc_address("glCreateProgram")))
   end
 
   # fun create_shader = glCreateShader(shaderType : Enum) : UInt
   def self.create_shader 
-    Box(LibGL::CreateShader).unbox(Box.box(LibGL.get_proc_address("glCreateShader")))
+    Box(LibGL::CreateShader)
+      .unbox(Box.box(LibGL.get_proc_address("glCreateShader")))
   end
 
-  # # fun shader_source = glShaderSource(shader : UInt, count : SizeI, string : Char**, length : Int*) : Void
   def self.shader_source 
-    Box(LibGL::ShaderSource).unbox(Box.box(LibGL.get_proc_address("glShaderSource")))
+    Box(LibGL::ShaderSource)
+      .unbox(Box.box(LibGL.get_proc_address("glShaderSource")))
   end
 
-  # # fun compile_shader = glCompileShader(shader : UInt) : Void
   def self.compile_shader 
-    Box(LibGL::CompileShader).unbox(Box.box(LibGL.get_proc_address("glCompileShader")))
+    Box(LibGL::CompileShader)
+      .unbox(Box.box(LibGL.get_proc_address("glCompileShader")))
   end
 
   # # fun get_shader_iv = glGetShaderiv(shader : UInt, pname : Enum, params : Int*) : Void
@@ -1337,7 +1293,8 @@ module GL
 
   # # fun get_shader_info_log = glGetShaderInfoLog(shader : UInt, buf_size : SizeI, length : SizeI*, info_log : Char*) : Void
   def self.get_shader_info_log 
-    Box(LibGL::GetShaderInfoLog).unbox(Box.box(LibGL.get_proc_address("glGetShaderInfoLog")))
+    Box(LibGL::GetShaderInfoLog)
+      .unbox(Box.box(LibGL.get_proc_address("glGetShaderInfoLog")))
   end
 
   # # fun bind_attrib_location = glBindAttribLocation(program : UInt, index : UInt, name : Char*) : Void
@@ -1381,13 +1338,8 @@ SDL.init do
 
   puts "sdl is running"
 
-  title = "Crystal OpenGL Demo"
-  width = 1920
-  height = 1080
-  flags = LibSDL::WINDOW_OPENGL | LibSDL::WINDOW_FULLSCREEN_DESKTOP
-
-  SDL::Window.new(title: title, width: width, height: height, flags: flags) do |window|
-
+  SDL::Window.new(title: "Crystal OpenGL Demo", width: 1920, height: 1080,
+                  flags: LibSDL::WINDOW_OPENGL | LibSDL::WINDOW_FULLSCREEN_DESKTOP) do |window|
     running = true
 
     puts "now running"
@@ -1416,111 +1368,123 @@ SDL.init do
 
     program.use
 
-      #compile shader programs
-      LibGL.clear(LibGL::COLOR_BUFFER_BIT)# | LibGL::DEPTH_BUFFER_BIT)
+    #compile shader programs
 
-      # Create a VBO and receive a handle
-      vbo_handle = uninitialized LibGL::UInt
-      GL.gen_buffers.call(1, pointerof(vbo_handle))
+    LibGL.clear(LibGL::COLOR_BUFFER_BIT)
 
-      # Bind the Array Buffer to our buffer using the handle
-      GL.bind_buffer.call(LibGL::ARRAY_BUFFER, vbo_handle)
+    # Create a VBO and receive a handle
+    vbo_handle = uninitialized LibGL::UInt
+    GL.gen_buffers.call(1, pointerof(vbo_handle))
 
-      # Pipe data over to VRAM
-      puts triangle.size * sizeof(LibGL::FLOAT)
-      GL.buffer_data(size: triangle.size * sizeof(LibGL::FLOAT),
-                     data: triangle.to_unsafe.as(Void*))
+    # Bind the Array Buffer to our buffer using the handle
+    GL.bind_buffer.call(LibGL::ARRAY_BUFFER, vbo_handle)
 
-      # Only use the position attribute of our vertices
-      GL.enable_vertex_attrib_array.call(0_u32)
+    # Pipe data over to VRAM
+    puts triangle.size * sizeof(LibGL::FLOAT)
+    GL.buffer_data(size: triangle.size * sizeof(LibGL::FLOAT),
+                   data: triangle.to_unsafe.as(Void*))
 
-      # Refer to the starting point of drawable data
-      p = uninitialized Void*
-      GL.vertex_attrib_pointer.call(0_u32, 3, LibGL::FLOAT, LibGL::FALSE, 0, p)
+    # Only use the position attribute of our vertices
+    GL.enable_vertex_attrib_array.call(0_u32)
 
-      # What sort of thing to draw, where to start in the buffer, and how many vertices
-      LibGL.draw_arrays(LibGL::TRIANGLES, 0_u32, triangle.size/3)
+    # Refer to the starting point of drawable data
+    p = uninitialized Void*
+    GL.vertex_attrib_pointer.call(0_u32, 3, LibGL::FLOAT, LibGL::FALSE, 0, p)
 
-      LibSDL.gl_swap_window(window)
-      horizontal_angle = 3.14_f32
-      vertical_angle = 0.0_f32
-      position = GLM.vec3(0,0,5)
-      model = GLM::Mat4.identity
-      rotation_angle = 0.0_f32
-      rotation = GLM::Mat4.identity
+    # What sort of thing to draw, where to start in the buffer, and how many vertices
+    LibGL.draw_arrays(LibGL::TRIANGLES, 0_u32, triangle.size/3)
+
+    LibSDL.gl_swap_window(window)
+    horizontal_angle = 3.14_f32
+    vertical_angle = 0.0_f32
+    position = GLM.vec3(0,0,5)
+    model = GLM::Mat4.identity
+    rotation_angle = 0.0_f32
+    rotation = GLM::Mat4.identity
+
+    rotation[0,0] = Math.cos(rotation_angle)
+    rotation[0,1] = Math.sin(rotation_angle)
+    rotation[1,0] = -Math.sin(rotation_angle)
+    rotation[1,1] = Math.cos(rotation_angle)
+
+    model = rotation*model
+
+    transform = mvp(horizontal_angle, vertical_angle, position, model)
+
+    LibSDL.set_relative_mouse_mode(true)
+
+    total_mouse_rel_x = 0
+    total_mouse_rel_y = 0
+
+    while running
+      total_mouse_rel_x = 0
+      total_mouse_rel_y = 0
+
+      swapped = false
+      checked_mouse = false
+      SDL.next_event do |event_type, event|
+        case event_type
+        when SDL::Event::Quit
+          running = false
+        when SDL::Event::Keydown
+          swapped = true
+          case event.key.keysym.sym
+          when LibSDL::Keycode::V
+            position.x += 0.1
+          when LibSDL::Keycode::B
+            position.x -= 0.1
+          when LibSDL::Keycode::F
+            position.y += 0.1
+          when LibSDL::Keycode::G
+            position.y -= 0.1
+          when LibSDL::Keycode::R
+            position.z += 0.1
+          when LibSDL::Keycode::T
+            position.z -= 0.1
+          when LibSDL::Keycode::W
+            rotation_angle -= 0.05
+          when LibSDL::Keycode::S
+            rotation_angle += 0.05
+          else
+          end
+        when SDL::Event::Keyup
+        when SDL::Event::TextInput
+        when SDL::Event::None
+        when SDL::Event::Window
+        when SDL::Event::MouseMotion
+          total_mouse_rel_x += event.motion.xrel
+          total_mouse_rel_y += event.motion.yrel
+        when SDL::Event::MouseButtonUp
+        when SDL::Event::MouseButtonDown
+        else
+        end
+      end
+      horizontal_angle += 0.001_f32 * total_mouse_rel_x
+      vertical_angle += 0.001_f32 * total_mouse_rel_y
+
       rotation[0,0] = Math.cos(rotation_angle)
       rotation[0,1] = Math.sin(rotation_angle)
       rotation[1,0] = -Math.sin(rotation_angle)
       rotation[1,1] = Math.cos(rotation_angle)
-      model = rotation*model
 
-      transform = mvp(horizontal_angle, vertical_angle, position, model)
+      transform = mvp(horizontal_angle, vertical_angle, position, rotation*model)
 
-      LibSDL.set_relative_mouse_mode(true)
-      total_mouse_rel_x = 0
-      total_mouse_rel_y = 0
-      while running
-        total_mouse_rel_x = 0
-        total_mouse_rel_y = 0
+      GL.uniform_matrix_4fv.call(loc3, 1, LibGL::FALSE, transform.to_unsafe)
+      LibGL.clear(LibGL::COLOR_BUFFER_BIT)
+      LibGL.draw_arrays(LibGL::TRIANGLES, 0_u32, triangle.size/3)
 
-        SDL.next_event do |event_type, event|
-          case event_type
-          when SDL::Event::Quit
-            running = false
-          when SDL::Event::Keydown
-            case event.key.keysym.sym
-            when LibSDL::Keycode::V
-              position.x += 0.1
-            when LibSDL::Keycode::B
-              position.x -= 0.1
-            when LibSDL::Keycode::F
-              position.y += 0.1
-            when LibSDL::Keycode::G
-              position.y -= 0.1
-            when LibSDL::Keycode::R
-              position.z += 0.1
-            when LibSDL::Keycode::T
-              position.z -= 0.1
-            when LibSDL::Keycode::W
-              rotation_angle -= 0.05
-            when LibSDL::Keycode::S
-              rotation_angle += 0.05
-            else
-            end
-          when SDL::Event::Keyup
-          when SDL::Event::TextInput
-          when SDL::Event::None
-          when SDL::Event::Window
-          when SDL::Event::MouseMotion
-            total_mouse_rel_x += event.motion.xrel
-            total_mouse_rel_y += event.motion.yrel
-          when SDL::Event::MouseButtonUp
-          when SDL::Event::MouseButtonDown
-          else
-          end
-        end
-        horizontal_angle += 0.001_f32 * total_mouse_rel_x
-        vertical_angle += 0.001_f32 * total_mouse_rel_y
+      LibGL.flush
+      LibGL.finish
+      LibSDL.gl_swap_window(window)
 
-        rotation[0,0] = Math.cos(rotation_angle)
-        rotation[0,1] = Math.sin(rotation_angle)
-        rotation[1,0] = -Math.sin(rotation_angle)
-        rotation[1,1] = Math.cos(rotation_angle)
-        transform = mvp(horizontal_angle, vertical_angle, position, rotation*model)
-        GL.uniform_matrix_4fv.call(loc3, 1, LibGL::FALSE, transform.to_unsafe)
-        LibGL.clear(LibGL::COLOR_BUFFER_BIT)
-        LibGL.draw_arrays(LibGL::TRIANGLES, 0_u32, triangle.size/3)
-        LibGL.flush
-        LibGL.finish
-        LibSDL.gl_swap_window(window)
+    end
+    # Disable position attribute use
+    GL.disable_vertex_attrib_array.call(0_u32)
 
-      end
-      # Disable position attribute use
-      GL.disable_vertex_attrib_array.call(0_u32)
+    # Unbind the Array Buffer
+    GL.bind_buffer.call(LibGL::ARRAY_BUFFER, 0_u32)
 
-      # Unbind the Array Buffer
-      GL.bind_buffer.call(LibGL::ARRAY_BUFFER, 0_u32)
-
+    program.unuse
   end
 
 end
